@@ -83,9 +83,9 @@ func main() {
 
 		q := u.Query()
 		q.Del("APIVersion")
-		q.Set("ip", rip)
-		q.Set("referer", referer)
-		q.Set("ua", ua)
+		q.Set("__tag__:__client_ip__", rip)
+		q.Set("__referer__", referer)
+		q.Set("__userAgent__", ua)
 		q.Set("project", project)
 		q.Set("logstore", logstore)
 
