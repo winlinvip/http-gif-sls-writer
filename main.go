@@ -56,6 +56,7 @@ func main() {
 	ol.Tf(ctx, "Handle /")
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/gif") {
+			ol.Wf(ctx, "Ignore %v of %v", r.URL.Path, r.URL.String())
 			http.NotFound(w, r)
 			return
 		}
