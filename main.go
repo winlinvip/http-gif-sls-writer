@@ -90,7 +90,11 @@ func main() {
 		q.Set("logstore", logstore)
 		ol.Tf(ctx, "Turn url=%v to %v", rawURL, q)
 
-		bb, err := json.Marshal(q)
+		qq := make(map[string]string)
+		for k, _ := range q {
+			qq[k] = q.Get(k)
+		}
+		bb, err := json.Marshal(qq)
 		if err != nil {
 			oh.WriteError(ctx, w, r, err)
 			return
