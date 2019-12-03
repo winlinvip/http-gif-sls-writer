@@ -66,29 +66,33 @@ func main() {
 		referer := r.Header.Get("Referer")
 		rawURL := r.URL.RawQuery
 
-		u, err := url.Parse(rawURL)
-		if err != nil {
-			oh.WriteError(ctx, w, r, err)
-			return
+		q := r.URL.Query()
+		if strings.Contains(rawURL, "://") {
+			u, err := url.Parse(rawURL)
+			if err != nil {
+				oh.WriteError(ctx, w, r, err)
+				return
+			}
+
+			var logstore string
+			if logstores := strings.SplitN(u.Path, "/", 4); len(logstores) > 3 {
+				logstore = logstores[2]
+			}
+
+			var project string
+			if projects := strings.SplitN(u.Host, ".", 2); len(projects) > 1 {
+				project = projects[0]
+			}
+
+			q = u.Query()
+			q.Del("APIVersion")
+			q.Set("project", project)
+			q.Set("logstore", logstore)
 		}
 
-		var logstore string
-		if logstores := strings.SplitN(u.Path, "/", 4); len(logstores) > 3 {
-			logstore = logstores[2]
-		}
-
-		var project string
-		if projects := strings.SplitN(u.Host, ".", 2); len(projects) > 1 {
-			project = projects[0]
-		}
-
-		q := u.Query()
-		q.Del("APIVersion")
 		q.Set("__tag__:__client_ip__", rip)
 		q.Set("__referer__", referer)
 		q.Set("__userAgent__", ua)
-		q.Set("project", project)
-		q.Set("logstore", logstore)
 
 		qq := make(map[string]string)
 		for k, _ := range q {
