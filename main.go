@@ -89,6 +89,7 @@ func main() {
 
 	// HTML img at https://help.aliyun.com/document_detail/31752.html
 	query := "https://xxx/logstores/xxx/track_ua.gif?APIVersion=0.6.0&k=v"
-	ol.Tf(nil, "Server at :%v for http://127.0.0.1:%v/api/v1/gif/as/sls?%v", port, port, query)
+	help := "https://help.aliyun.com/document_detail/31752.html"
+	ol.Tf(nil, "Server at :%v for http://127.0.0.1:%v/gif/v1/sls?%v at %v", port, port, query, help)
 	http.ListenAndServe(fmt.Sprintf(":%v", port), nil)
 }

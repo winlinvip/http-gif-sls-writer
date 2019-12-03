@@ -12,3 +12,4 @@
 *.out
 
 .idea
+/http-gif-sls-writer
