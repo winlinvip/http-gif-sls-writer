@@ -111,10 +111,8 @@ func main() {
 
 		h := w.Header()
 		h.Set("Content-Type", "image/gif")
-		//h.Set("Connection", "close")
 		h.Set("Access-Control-Allow-Origin", "*")
 		h.Set("Cache-Control", "no-cache")
-		//h.Set("Expires", "0")
 
 		// GIF for HTML img at https://help.aliyun.com/document_detail/31752.html
 		b := []byte{
