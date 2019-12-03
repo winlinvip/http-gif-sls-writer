@@ -88,7 +88,6 @@ func main() {
 		q.Set("ua", ua)
 		q.Set("project", project)
 		q.Set("logstore", logstore)
-		ol.Tf(ctx, "Turn url=%v to %v", rawURL, q)
 
 		qq := make(map[string]string)
 		for k, _ := range q {
@@ -99,7 +98,11 @@ func main() {
 			oh.WriteError(ctx, w, r, err)
 			return
 		}
-		io.WriteString(f, string(bb))
+		if _, err := io.WriteString(f, string(bb)); err != nil {
+			oh.WriteError(ctx, w, r, err)
+			return
+		}
+		ol.Tf(ctx, "Turn url=%v to %v", rawURL, string(bb))
 
 		h := w.Header()
 		h.Set("Server", "go-oryx")
