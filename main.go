@@ -98,7 +98,7 @@ func main() {
 			oh.WriteError(ctx, w, r, err)
 			return
 		}
-		if _, err := io.WriteString(f, string(bb) + "\n"); err != nil {
+		if _, err := io.WriteString(f, string(bb)+"\n"); err != nil {
 			oh.WriteError(ctx, w, r, err)
 			return
 		}
