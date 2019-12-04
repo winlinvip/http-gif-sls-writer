@@ -92,6 +92,7 @@ func main() {
 
 		q.Set("__tag__:__client_ip__", rip)
 
+		oreferer := referer
 		if referer != "" {
 			if u, err := url.Parse(referer); err != nil {
 				referer = u.Host
@@ -99,6 +100,7 @@ func main() {
 			q.Set("__referer__", referer)
 		}
 
+		oua := ua
 		if strings.Contains(ua, "Mac OS X") && strings.Contains(ua, "Macintosh") {
 			// Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36
 			ua = "macOS"
@@ -143,7 +145,7 @@ func main() {
 			oh.WriteError(ctx, w, r, err)
 			return
 		}
-		ol.Tf(ctx, "Turn url=%v to %v", rawURL, string(bb))
+		ol.Tf(ctx, "Stat as %v from url=%v, referer=%v, ua=%v", string(bb), rawURL, oreferer, oua)
 
 		h := w.Header()
 		h.Set("Content-Type", "image/gif")
