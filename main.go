@@ -94,7 +94,7 @@ func main() {
 
 		oreferer := referer
 		if referer != "" {
-			if u, err := url.Parse(referer); err != nil {
+			if u, err := url.Parse(referer); err == nil {
 				referer = u.Host
 			}
 			q.Set("__referer__", referer)
