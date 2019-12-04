@@ -91,8 +91,44 @@ func main() {
 		}
 
 		q.Set("__tag__:__client_ip__", rip)
-		q.Set("__referer__", referer)
-		q.Set("__userAgent__", ua)
+
+		if referer != "" {
+			if u, err := url.Parse(referer); err != nil {
+				referer = u.Host
+			}
+			q.Set("__referer__", referer)
+		}
+
+		if strings.Contains(ua, "Mac OS X") && strings.Contains(ua, "Macintosh") {
+			// Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36
+			ua = "macOS"
+		} else if strings.Contains(ua, "Windows") {
+			// Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36
+			// Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36
+			ua = "windows"
+		} else if strings.Contains(ua, "Android") {
+			// Mozilla/5.0 (Linux; U; Android 8.1.0; zh-CN; EML-AL00 Build/HUAWEIEML-AL00) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.108 baidu.sogo.uc.UCBrowser/11.9.4.974 UWS/2.13.1.48 Mobile Safari/537.36 AliApp(DingTalk/4.5.11) com.alibaba.android.rimet/10487439 Channel/227200 language/zh-CN
+			ua = "android"
+		} else if strings.Contains(ua, "iPhone") {
+			// Mozilla/5.0 (iPhone; CPU iPhone OS 7_0 like Mac OS X) AppleWebKit/537.51.1 (KHTML, like Gecko) Version/7.0 Mobile/11A465 Safari/9537.53 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)
+			ua = "ios"
+		} else if strings.Contains(ua, "Linux") {
+			// Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36
+			// Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0
+			ua = "linux"
+		} else if strings.HasPrefix(ua, "github-camo") {
+			// github-camo (876de43e)
+			ua = "camo"
+		} else if strings.Contains(ua, "spider") {
+			// Mozilla/5.0 (compatible; Baiduspider-render/2.0; +http://www.baidu.com/search/spider.html)
+			ua = "spider"
+		} else if strings.Contains(ua, "curl") {
+			// curl/7.54.0
+			ua = "curl"
+		}
+		if ua != "" {
+			q.Set("__userAgent__", ua)
+		}
 
 		qq := make(map[string]string)
 		for k, _ := range q {
