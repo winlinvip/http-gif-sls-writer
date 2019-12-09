@@ -118,9 +118,10 @@ func main() {
 			// Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36
 			// Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0
 			ua = "linux"
-		} else if strings.HasPrefix(ua, "github-camo") {
+		} else if strings.HasPrefix(ua, "github-camo") || strings.HasPrefix(ua, "search-http-client") {
 			// github-camo (876de43e)
-			ua = "camo"
+			// search-http-client
+			ua = "agent"
 		} else if strings.Contains(ua, "spider") {
 			// Mozilla/5.0 (compatible; Baiduspider-render/2.0; +http://www.baidu.com/search/spider.html)
 			ua = "spider"
