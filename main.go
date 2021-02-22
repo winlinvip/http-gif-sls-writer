@@ -28,7 +28,7 @@ func main() {
 	ctx := context.Background()
 
 	var conf string
-	flag.StringVar(&conf, "c", "", "")
+	flag.StringVar(&conf, "c", "", "The config file path")
 
 	flag.Usage = func() {
 		fmt.Println(fmt.Sprintf("HTTP GIF as SLS writer"))
@@ -57,6 +57,7 @@ func main() {
 			Topic    string `json:"topic"`
 			Project  string `json:"project"`
 			LogStore string `json:"logstore"`
+			Endpoint string `json:"endpoint"`
 		} `json:"log_aliyun_ak"`
 	}{}
 	if err := func() error {
@@ -80,9 +81,9 @@ func main() {
 		fmt.Println(err)
 		os.Exit(-1)
 	}
-	ol.Tf(ctx, "Run with conf=%v, port=%v, file=(%v,%v), aliyun(%v,%v,%v,%v,%v)", conf,
+	ol.Tf(ctx, "Run with conf=%v, port=%v, file=(%v,%v), aliyun(%v,%v,%v,%v,%v,%v)", conf,
 		co.Port, co.LogFile.Enabled, co.LogFile.Tank, co.LogAliyunAK.Enabled, co.LogAliyunAK.ID,
-		co.LogAliyunAK.Topic, co.LogAliyunAK.Project, co.LogAliyunAK.LogStore)
+		co.LogAliyunAK.Topic, co.LogAliyunAK.Project, co.LogAliyunAK.LogStore, co.LogAliyunAK.Endpoint)
 
 	var f *os.File
 	if co.LogFile.Enabled {
@@ -102,7 +103,9 @@ func main() {
 	var client *sls.Client
 	if co.LogAliyunAK.Enabled {
 		client = &sls.Client{}
-		client.ResetAccessKeyToken(co.LogAliyunAK.ID, co.LogAliyunAK.Secret, "")
+		client.Endpoint = co.LogAliyunAK.Endpoint
+		client.AccessKeyID = co.LogAliyunAK.ID
+		client.AccessKeySecret = co.LogAliyunAK.Secret
 	}
 
 	oh.Server = "go-oryx"
@@ -242,9 +245,9 @@ func main() {
 	})
 
 	// HTML img at https://help.aliyun.com/document_detail/31752.html
-	query := "https://xxx/logstores/xxx/track_ua.gif?APIVersion=0.6.0&k=v"
+	query := "https://xxx/logstores/xxx/track_ua.gif?APIVersion=0.6.0&site=ossrs.net&path=/release/docker"
 	help := "https://help.aliyun.com/document_detail/31752.html"
-	ol.Tf(ctx, "Server at :%v for http://127.0.0.1:%v/gif/v1/sls?%v at %v", co.Port, co.Port, query, help)
+	ol.Tf(ctx, "Server at :%v for http://127.0.0.1:%v/gif/v1/sls.gif?site=ossrs.net&path=/release/docker like %v at %v", co.Port, co.Port, query, help)
 	http.ListenAndServe(fmt.Sprintf(":%v", co.Port), nil)
 }
 
