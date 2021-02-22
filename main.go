@@ -5,6 +5,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	_ "github.com/aliyun/alibaba-cloud-sdk-go/sdk"
+	_ "github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
+	_ "github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
+	_ "github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
+	"github.com/aliyun/aliyun-log-go-sdk"
+	"github.com/golang/protobuf/proto"
+	oe "github.com/ossrs/go-oryx-lib/errors"
 	oh "github.com/ossrs/go-oryx-lib/http"
 	ol "github.com/ossrs/go-oryx-lib/logger"
 	"io"
@@ -14,6 +21,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -43,9 +51,12 @@ func main() {
 			Tank    string `json:"tank"`
 		} `json:"log_file"`
 		LogAliyunAK struct {
-			Enabled bool   `json:"enabled"`
-			ID      string `json:"id"`
-			Secret  string `json:"secret"`
+			Enabled  bool   `json:"enabled"`
+			ID       string `json:"id"`
+			Secret   string `json:"secret"`
+			Topic    string `json:"topic"`
+			Project  string `json:"project"`
+			LogStore string `json:"logstore"`
 		} `json:"log_aliyun_ak"`
 	}{}
 	if err := func() error {
@@ -69,8 +80,9 @@ func main() {
 		fmt.Println(err)
 		os.Exit(-1)
 	}
-	ol.Tf(ctx, "Run with conf=%v, port=%v, file=(%v,%v), aliyun(%v,%v)", conf,
-		co.Port, co.LogFile.Enabled, co.LogFile.Tank, co.LogAliyunAK.Enabled, co.LogAliyunAK.ID)
+	ol.Tf(ctx, "Run with conf=%v, port=%v, file=(%v,%v), aliyun(%v,%v,%v,%v,%v)", conf,
+		co.Port, co.LogFile.Enabled, co.LogFile.Tank, co.LogAliyunAK.Enabled, co.LogAliyunAK.ID,
+		co.LogAliyunAK.Topic, co.LogAliyunAK.Project, co.LogAliyunAK.LogStore)
 
 	var f *os.File
 	if co.LogFile.Enabled {
@@ -85,6 +97,12 @@ func main() {
 				f = lf
 			}
 		}
+	}
+
+	var client *sls.Client
+	if co.LogAliyunAK.Enabled {
+		client = &sls.Client{}
+		client.ResetAccessKeyToken(co.LogAliyunAK.ID, co.LogAliyunAK.Secret, "")
 	}
 
 	oh.Server = "go-oryx"
@@ -184,6 +202,27 @@ func main() {
 				return
 			}
 		}
+		if client != nil {
+			contents, err := slsKVEncode(ctx, qq)
+			if err != nil {
+				oh.WriteError(ctx, w, r, err)
+				return
+			}
+			logGroup := &sls.LogGroup{
+				Topic: proto.String(co.LogAliyunAK.Topic),
+				Logs: []*sls.Log{
+					&sls.Log{
+						Time:     proto.Uint32(uint32(time.Now().Unix())),
+						Contents: contents,
+					},
+				},
+			}
+			err = client.PutLogs(co.LogAliyunAK.Project, co.LogAliyunAK.LogStore, logGroup)
+			if err != nil {
+				oh.WriteError(ctx, w, r, err)
+				return
+			}
+		}
 		ol.Tf(ctx, "Stat as %v from url=%v", string(bb), rawURL)
 
 		h := w.Header()
@@ -236,4 +275,21 @@ func GetOriginalClientIP(r *http.Request) string {
 	}
 
 	return rip
+}
+
+func slsKVEncode(ctx context.Context, kvs map[string]string) ([]*sls.LogContent, error) {
+	if kvs == nil {
+		return nil, oe.New("nil")
+	}
+
+	var contents []*sls.LogContent
+	for key, value := range kvs {
+		contents = append(contents, &sls.LogContent{
+			Key: proto.String(key), Value: proto.String(value),
+		})
+	}
+
+	ol.If(ctx, "Encode JSON %v as KV %v", kvs, contents)
+
+	return contents, nil
 }
