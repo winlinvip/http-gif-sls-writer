@@ -24,5 +24,5 @@ COPY --from=build /usr/local/etc/main.conf /usr/local/etc/
 # Default workdir and command.
 WORKDIR /usr/local
 CMD ["./bin/http-gif-sls-writer", \
-    "-c", "./etc/main" \
+    "-c", "./etc/main.conf" \
     ]
