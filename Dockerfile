@@ -5,9 +5,10 @@
 ############################################################
 FROM registry.cn-hangzhou.aliyuncs.com/ossrs/srs:dev AS build
 
-RUN make
+COPY . /usr/local/http-gif-sls-writer
+RUN cd /usr/local/http-gif-sls-writer && make
 # Install binary.
-RUN cp objs/http-gif-sls-writer /usr/local/bin/http-gif-sls-writer
+RUN cp /usr/local/http-gif-sls-writer/objs/http-gif-sls-writer /usr/local/bin/
 
 ############################################################
 # dist
