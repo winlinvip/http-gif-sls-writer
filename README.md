@@ -5,5 +5,5 @@ Docker for https://github.com/winlinvip/http-gif-sls-writer
 ## Usage
 
 ```
-docker run -p 80:80 --rm registry.cn-hangzhou.aliyuncs.com/ossrs/hgsw
+docker run -p 1987:1987 --rm registry.cn-hangzhou.aliyuncs.com/ossrs/hgsw
 ```
