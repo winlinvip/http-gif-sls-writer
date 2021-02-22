@@ -8,6 +8,7 @@ import (
 	oh "github.com/ossrs/go-oryx-lib/http"
 	ol "github.com/ossrs/go-oryx-lib/logger"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -18,36 +19,71 @@ import (
 func main() {
 	ctx := context.Background()
 
-	var port int
-	flag.IntVar(&port, "port", 0, "Listen port.")
-
-	var logfile string
-	flag.StringVar(&logfile, "log", "", "Log file path. Default: stdout")
+	var conf string
+	flag.StringVar(&conf, "c", "", "")
 
 	flag.Usage = func() {
 		fmt.Println(fmt.Sprintf("HTTP GIF as SLS writer"))
 		flag.PrintDefaults()
 		fmt.Println(fmt.Sprintf("For example:"))
-		fmt.Println(fmt.Sprintf("		%v -port=1987", os.Args[0]))
+		fmt.Println(fmt.Sprintf("    %v -c main.conf", os.Args[0]))
 	}
 
 	flag.Parse()
 
-	if port == 0 {
+	if conf == "" {
 		flag.Usage()
 		os.Exit(-1)
 	}
 
+	co := struct {
+		Port    int `json:"port"`
+		LogFile struct {
+			Enabled bool   `json:"enabled"`
+			Tank    string `json:"tank"`
+		} `json:"log_file"`
+		LogAliyunAK struct {
+			Enabled bool   `json:"enabled"`
+			ID      string `json:"id"`
+			Secret  string `json:"secret"`
+		} `json:"log_aliyun_ak"`
+	}{}
+	if err := func() error {
+		f, err := os.Open(conf)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		b, err := ioutil.ReadAll(f)
+		if err != nil {
+			return err
+		}
+
+		if err := json.Unmarshal(b, &co); err != nil {
+			return err
+		}
+
+		return nil
+	}(); err != nil {
+		fmt.Println(err)
+		os.Exit(-1)
+	}
+	ol.Tf(ctx, "Run with conf=%v, port=%v, file=(%v,%v), aliyun(%v,%v)", conf,
+		co.Port, co.LogFile.Enabled, co.LogFile.Tank, co.LogAliyunAK.Enabled, co.LogAliyunAK.ID)
+
 	var f *os.File
-	if logfile == "" {
-		f = os.Stdout
-	} else {
-		if lf, err := os.OpenFile(logfile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666); err != nil {
-			ol.Ef(ctx, "Open %v err %v", logfile, err)
-			os.Exit(-1)
+	if co.LogFile.Enabled {
+		if co.LogFile.Tank == "" || co.LogFile.Tank == "stdout" {
+			f = os.Stdout
 		} else {
-			defer lf.Close()
-			f = lf
+			if lf, err := os.OpenFile(co.LogFile.Tank, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666); err != nil {
+				ol.Ef(ctx, "Open %v err %v", co.LogFile.Tank, err)
+				os.Exit(-1)
+			} else {
+				defer lf.Close()
+				f = lf
+			}
 		}
 	}
 
@@ -142,9 +178,11 @@ func main() {
 			oh.WriteError(ctx, w, r, err)
 			return
 		}
-		if _, err := io.WriteString(f, string(bb)+"\n"); err != nil {
-			oh.WriteError(ctx, w, r, err)
-			return
+		if f != nil {
+			if _, err := io.WriteString(f, string(bb)+"\n"); err != nil {
+				oh.WriteError(ctx, w, r, err)
+				return
+			}
 		}
 		ol.Tf(ctx, "Stat as %v from url=%v", string(bb), rawURL)
 
@@ -167,8 +205,8 @@ func main() {
 	// HTML img at https://help.aliyun.com/document_detail/31752.html
 	query := "https://xxx/logstores/xxx/track_ua.gif?APIVersion=0.6.0&k=v"
 	help := "https://help.aliyun.com/document_detail/31752.html"
-	ol.Tf(ctx, "Server at :%v for http://127.0.0.1:%v/gif/v1/sls?%v at %v", port, port, query, help)
-	http.ListenAndServe(fmt.Sprintf(":%v", port), nil)
+	ol.Tf(ctx, "Server at :%v for http://127.0.0.1:%v/gif/v1/sls?%v at %v", co.Port, co.Port, query, help)
+	http.ListenAndServe(fmt.Sprintf(":%v", co.Port), nil)
 }
 
 func GetOriginalClientIP(r *http.Request) string {
