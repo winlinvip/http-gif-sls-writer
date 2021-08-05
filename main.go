@@ -26,6 +26,7 @@ import (
 
 func main() {
 	ctx := context.Background()
+	clients = make(map[string]*sls.Client)
 
 	var conf string
 	flag.StringVar(&conf, "c", "", "The config file path")
@@ -44,22 +45,7 @@ func main() {
 		os.Exit(-1)
 	}
 
-	co := struct {
-		Port    int `json:"port"`
-		LogFile struct {
-			Enabled bool   `json:"enabled"`
-			Tank    string `json:"tank"`
-		} `json:"log_file"`
-		LogAliyunAK struct {
-			Enabled  bool   `json:"enabled"`
-			ID       string `json:"id"`
-			Secret   string `json:"secret"`
-			Topic    string `json:"topic"`
-			Project  string `json:"project"`
-			LogStore string `json:"logstore"`
-			Endpoint string `json:"endpoint"`
-		} `json:"log_aliyun_ak"`
-	}{}
+	co := Config{}
 	if err := func() error {
 		f, err := os.Open(conf)
 		if err != nil {
@@ -100,19 +86,15 @@ func main() {
 		}
 	}
 
-	var client *sls.Client
-	if co.LogAliyunAK.Enabled {
-		client = &sls.Client{}
-		client.Endpoint = co.LogAliyunAK.Endpoint
-		client.AccessKeyID = co.LogAliyunAK.ID
-		client.AccessKeySecret = co.LogAliyunAK.Secret
-	}
-
 	oh.Server = "go-oryx"
 
 	ol.Tf(ctx, "Handle /")
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/gif") {
+		q := r.URL.Query()
+		cp := co.Parse(q)
+		logForApp := parseLogForApp(q)
+
+		if !strings.HasPrefix(r.URL.Path, "/gif") && !logForApp {
 			ol.Wf(ctx, "Ignore %v of %v", r.URL.Path, r.URL.String())
 			http.NotFound(w, r)
 			return
@@ -123,77 +105,26 @@ func main() {
 		referer := r.Header.Get("Referer")
 		rawURL := r.URL.RawQuery
 
-		q := r.URL.Query()
-		if strings.Contains(rawURL, "://") {
-			u, err := url.Parse(rawURL)
-			if err != nil {
-				oh.WriteError(ctx, w, r, err)
-				return
-			}
+		if logForApp {
+			q.Set("rip", rip)
+		} else {
+			q.Set("__tag__:__client_ip__", rip)
+			q.Set("oreferer", referer)
+			q.Set("__referer__", reparseReferer(referer))
 
-			var logstore string
-			if logstores := strings.SplitN(u.Path, "/", 4); len(logstores) > 3 {
-				logstore = logstores[2]
-			}
-
-			var project string
-			if projects := strings.SplitN(u.Host, ".", 2); len(projects) > 1 {
-				project = projects[0]
-			}
-
-			q = u.Query()
-			q.Del("APIVersion")
-			q.Set("project", project)
-			q.Set("logstore", logstore)
-		}
-
-		q.Set("__tag__:__client_ip__", rip)
-
-		q.Set("oreferer", referer)
-		if referer != "" {
-			if u, err := url.Parse(referer); err == nil {
-				referer = u.Host
-			}
-			q.Set("__referer__", referer)
-		}
-
-		q.Set("oua", ua)
-		if strings.Contains(ua, "Mac OS X") && strings.Contains(ua, "Macintosh") {
-			// Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36
-			ua = "macOS"
-		} else if strings.Contains(ua, "Windows") {
-			// Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36
-			// Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36
-			ua = "windows"
-		} else if strings.Contains(ua, "Android") {
-			// Mozilla/5.0 (Linux; U; Android 8.1.0; zh-CN; EML-AL00 Build/HUAWEIEML-AL00) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.108 baidu.sogo.uc.UCBrowser/11.9.4.974 UWS/2.13.1.48 Mobile Safari/537.36 AliApp(DingTalk/4.5.11) com.alibaba.android.rimet/10487439 Channel/227200 language/zh-CN
-			ua = "android"
-		} else if strings.Contains(ua, "iPhone") {
-			// Mozilla/5.0 (iPhone; CPU iPhone OS 7_0 like Mac OS X) AppleWebKit/537.51.1 (KHTML, like Gecko) Version/7.0 Mobile/11A465 Safari/9537.53 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)
-			ua = "ios"
-		} else if strings.Contains(ua, "Linux") {
-			// Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36
-			// Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0
-			ua = "linux"
-		} else if strings.HasPrefix(ua, "github-camo") || strings.HasPrefix(ua, "search-http-client") {
-			// github-camo (876de43e)
-			// search-http-client
-			ua = "agent"
-		} else if strings.Contains(ua, "spider") {
-			// Mozilla/5.0 (compatible; Baiduspider-render/2.0; +http://www.baidu.com/search/spider.html)
-			ua = "spider"
-		} else if strings.Contains(ua, "curl") {
-			// curl/7.54.0
-			ua = "curl"
-		}
-		if ua != "" {
-			q.Set("__userAgent__", ua)
+			q.Set("oua", ua)
+			q.Set("__userAgent__", reparseUserAgent(ua))
 		}
 
 		qq := make(map[string]string)
 		for k, _ := range q {
 			qq[k] = q.Get(k)
 		}
+		if err := writeSlsLog(ctx, &cp, qq); err != nil {
+			oh.WriteError(ctx, w, r, err)
+			return
+		}
+
 		bb, err := json.Marshal(qq)
 		if err != nil {
 			oh.WriteError(ctx, w, r, err)
@@ -205,28 +136,12 @@ func main() {
 				return
 			}
 		}
-		if client != nil {
-			contents, err := slsKVEncode(ctx, qq)
-			if err != nil {
-				oh.WriteError(ctx, w, r, err)
-				return
-			}
-			logGroup := &sls.LogGroup{
-				Topic: proto.String(co.LogAliyunAK.Topic),
-				Logs: []*sls.Log{
-					&sls.Log{
-						Time:     proto.Uint32(uint32(time.Now().Unix())),
-						Contents: contents,
-					},
-				},
-			}
-			err = client.PutLogs(co.LogAliyunAK.Project, co.LogAliyunAK.LogStore, logGroup)
-			if err != nil {
-				oh.WriteError(ctx, w, r, err)
-				return
-			}
+		ol.Tf(ctx, "Stat as %v from url=%v config=%v", string(bb), rawURL, cp)
+
+		if logForApp {
+			w.Write(nil)
+			return
 		}
-		ol.Tf(ctx, "Stat as %v from url=%v", string(bb), rawURL)
 
 		h := w.Header()
 		h.Set("Content-Type", "image/gif")
@@ -245,9 +160,12 @@ func main() {
 	})
 
 	// HTML img at https://help.aliyun.com/document_detail/31752.html
-	query := "https://xxx/logstores/xxx/track_ua.gif?APIVersion=0.6.0&site=ossrs.net&path=/release/docker"
 	help := "https://help.aliyun.com/document_detail/31752.html"
-	ol.Tf(ctx, "Server at :%v for http://127.0.0.1:%v/gif/v1/sls.gif?site=ossrs.net&path=/release/docker like %v at %v", co.Port, co.Port, query, help)
+	ol.Tf(ctx, "Server at :%v for http://127.0.0.1:%v/gif/v1/sls.gif?site=ossrs.net&path=/release/docker @see %v", co.Port, co.Port, help)
+	ol.Tf(ctx, "->Note that ?_sys_project=xxx to overwrite the SLS project")
+	ol.Tf(ctx, "->Note that ?_sys_logstore=xxx to overwrite the SLS logstore")
+	ol.Tf(ctx, "->Note that ?_sys_endpoint=xxx to overwrite the SLS endpoint")
+	ol.Tf(ctx, "->Note that ?_sys_logfmt=app to write raw data, without web fields")
 	http.ListenAndServe(fmt.Sprintf(":%v", co.Port), nil)
 }
 
@@ -295,4 +213,142 @@ func slsKVEncode(ctx context.Context, kvs map[string]string) ([]*sls.LogContent,
 	ol.If(ctx, "Encode JSON %v as KV %v", kvs, contents)
 
 	return contents, nil
+}
+
+var clients map[string]*sls.Client
+
+func buildSlsClient(co *Config) *sls.Client {
+	if !co.LogAliyunAK.Enabled {
+		return nil
+	}
+
+	if v, ok := clients[co.LogAliyunAK.Endpoint]; ok {
+		return v
+	}
+
+	client := &sls.Client{}
+	client.Endpoint = co.LogAliyunAK.Endpoint
+	client.AccessKeyID = co.LogAliyunAK.ID
+	client.AccessKeySecret = co.LogAliyunAK.Secret
+	clients[co.LogAliyunAK.Endpoint] = client
+	return client
+}
+
+type Config struct {
+	Port    int `json:"port"`
+	LogFile struct {
+		Enabled bool   `json:"enabled"`
+		Tank    string `json:"tank"`
+	} `json:"log_file"`
+	LogAliyunAK struct {
+		Enabled  bool   `json:"enabled"`
+		ID       string `json:"id"`
+		Secret   string `json:"secret"`
+		Topic    string `json:"topic"`
+		Project  string `json:"project"`
+		LogStore string `json:"logstore"`
+		Endpoint string `json:"endpoint"`
+	} `json:"log_aliyun_ak"`
+}
+
+func (co Config) String() string {
+	return fmt.Sprintf("project=%v, logstore=%v, endpoint=%v", co.LogAliyunAK.Project, co.LogAliyunAK.LogStore, co.LogAliyunAK.Endpoint)
+}
+
+func (co Config) Parse(q url.Values) Config {
+	cp := co
+
+	if project := q.Get("_sys_project"); project != "" {
+		cp.LogAliyunAK.Project = project
+		q.Del("_sys_project")
+	}
+
+	if logstore := q.Get("_sys_logstore"); logstore != "" {
+		cp.LogAliyunAK.LogStore = logstore
+		q.Del("_sys_logstore")
+	}
+
+	if endpoint := q.Get("_sys_endpoint"); endpoint != "" {
+		cp.LogAliyunAK.Endpoint = endpoint
+		q.Del("_sys_endpoint")
+	}
+
+	return cp
+}
+
+func parseLogForApp(q url.Values) bool {
+	logfmt := q.Get("_sys_logfmt")
+	if logfmt != "" {
+		q.Del("_sys_logfmt")
+	}
+	return logfmt == "app"
+}
+
+func writeSlsLog(ctx context.Context, co *Config, qq map[string]string) error {
+	client := buildSlsClient(co)
+	if client == nil {
+		return nil
+	}
+
+	contents, err := slsKVEncode(ctx, qq)
+	if err != nil {
+		return err
+	}
+
+	logGroup := &sls.LogGroup{
+		Topic: proto.String(co.LogAliyunAK.Topic),
+		Logs: []*sls.Log{
+			&sls.Log{
+				Time:     proto.Uint32(uint32(time.Now().Unix())),
+				Contents: contents,
+			},
+		},
+	}
+	err = client.PutLogs(co.LogAliyunAK.Project, co.LogAliyunAK.LogStore, logGroup)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func reparseReferer(referer string) string {
+	if referer != "" {
+		if u, err := url.Parse(referer); err == nil {
+			return u.Host
+		}
+	}
+	return referer
+}
+
+func reparseUserAgent(ua string) string {
+	if strings.Contains(ua, "Mac OS X") && strings.Contains(ua, "Macintosh") {
+		// Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36
+		return "macOS"
+	} else if strings.Contains(ua, "Windows") {
+		// Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36
+		// Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36
+		return "windows"
+	} else if strings.Contains(ua, "Android") {
+		// Mozilla/5.0 (Linux; U; Android 8.1.0; zh-CN; EML-AL00 Build/HUAWEIEML-AL00) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.108 baidu.sogo.uc.UCBrowser/11.9.4.974 UWS/2.13.1.48 Mobile Safari/537.36 AliApp(DingTalk/4.5.11) com.alibaba.android.rimet/10487439 Channel/227200 language/zh-CN
+		return "android"
+	} else if strings.Contains(ua, "iPhone") {
+		// Mozilla/5.0 (iPhone; CPU iPhone OS 7_0 like Mac OS X) AppleWebKit/537.51.1 (KHTML, like Gecko) Version/7.0 Mobile/11A465 Safari/9537.53 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)
+		return "ios"
+	} else if strings.Contains(ua, "Linux") {
+		// Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36
+		// Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0
+		return "linux"
+	} else if strings.HasPrefix(ua, "github-camo") || strings.HasPrefix(ua, "search-http-client") {
+		// github-camo (876de43e)
+		// search-http-client
+		return "agent"
+	} else if strings.Contains(ua, "spider") {
+		// Mozilla/5.0 (compatible; Baiduspider-render/2.0; +http://www.baidu.com/search/spider.html)
+		return "spider"
+	} else if strings.Contains(ua, "curl") {
+		// curl/7.54.0
+		return "curl"
+	}
+	return ua
 }
