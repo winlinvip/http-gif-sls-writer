@@ -120,7 +120,7 @@ func main() {
 				q.Set("ua", reparseUserAgent(ua))
 			}
 			if keepFWD {
-				q.Set("fwd", q.Get("X-Forwarded-For"))
+				q.Set("fwd", strings.Join(r.Header["X-Forwarded-For"], ","))
 			}
 		} else {
 			q.Set("oreferer", referer)
