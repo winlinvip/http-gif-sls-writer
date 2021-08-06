@@ -92,7 +92,7 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		cp := co.Parse(q)
-		logForApp := parseLogForApp(q)
+		logForApp, keepReferer, keepUA, keepOReferer, keepOUA := parseLogForApp(q)
 
 		if !strings.HasPrefix(r.URL.Path, "/gif") && !logForApp {
 			ol.Wf(ctx, "Ignore %v of %v", r.URL.Path, r.URL.String())
@@ -107,18 +107,31 @@ func main() {
 
 		if logForApp {
 			q.Set("rip", rip)
+			if keepOReferer {
+				q.Set("oreferer", referer)
+			}
+			if keepOUA {
+				q.Set("oua", ua)
+			}
+			if keepReferer {
+				q.Set("referer", reparseReferer(referer))
+			}
+			if keepUA {
+				q.Set("ua", reparseUserAgent(ua))
+			}
 		} else {
-			q.Set("__tag__:__client_ip__", rip)
 			q.Set("oreferer", referer)
-			q.Set("__referer__", reparseReferer(referer))
-
 			q.Set("oua", ua)
+			q.Set("__tag__:__client_ip__", rip)
+			q.Set("__referer__", reparseReferer(referer))
 			q.Set("__userAgent__", reparseUserAgent(ua))
 		}
 
 		qq := make(map[string]string)
 		for k, _ := range q {
-			qq[k] = q.Get(k)
+			if q.Get(k) != "" {
+				qq[k] = q.Get(k)
+			}
 		}
 		if err := writeSlsLog(ctx, &cp, qq); err != nil {
 			oh.WriteError(ctx, w, r, err)
@@ -166,6 +179,10 @@ func main() {
 	ol.Tf(ctx, "->Note that ?_sys_logstore=xxx to overwrite the SLS logstore")
 	ol.Tf(ctx, "->Note that ?_sys_endpoint=xxx to overwrite the SLS endpoint")
 	ol.Tf(ctx, "->Note that ?_sys_logfmt=app to write raw data, without web fields")
+	ol.Tf(ctx, "->Note that ?_sys_keep_referer=true to keep the referer")
+	ol.Tf(ctx, "->Note that ?_sys_keep_ua=true to keep the ua")
+	ol.Tf(ctx, "->Note that ?_sys_keep_oreferer=true to keep the original referer")
+	ol.Tf(ctx, "->Note that ?_sys_keep_oua=true to keep the original ua")
 	http.ListenAndServe(fmt.Sprintf(":%v", co.Port), nil)
 }
 
@@ -276,12 +293,22 @@ func (co Config) Parse(q url.Values) Config {
 	return cp
 }
 
-func parseLogForApp(q url.Values) bool {
-	logfmt := q.Get("_sys_logfmt")
-	if logfmt != "" {
-		q.Del("_sys_logfmt")
+func parseLogForApp(q url.Values) (logForApp, keepReferer, keepUA, keepOReferer, keepOUA bool) {
+	for k, v := range map[string]*bool{
+		"_sys_logfmt_app":    &logForApp,
+		"_sys_keep_referer":  &keepReferer,
+		"_sys_keep_ua":       &keepUA,
+		"_sys_keep_oreferer": &keepOReferer,
+		"_sys_keep_oua":      &keepOUA,
+	} {
+		if qv := q.Get(k); qv != "" {
+			q.Del(k)
+			if qv == "true" {
+				*v = true
+			}
+		}
 	}
-	return logfmt == "app"
+	return
 }
 
 func writeSlsLog(ctx context.Context, co *Config, qq map[string]string) error {
@@ -349,6 +376,8 @@ func reparseUserAgent(ua string) string {
 	} else if strings.Contains(ua, "curl") {
 		// curl/7.54.0
 		return "curl"
+	} else if len(ua) > 8 {
+		return ua[:8]
 	}
 	return ua
 }
