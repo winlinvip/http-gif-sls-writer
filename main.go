@@ -274,20 +274,15 @@ func (co Config) String() string {
 
 func (co Config) Parse(q url.Values) Config {
 	cp := co
-
-	if project := q.Get("_sys_project"); project != "" {
-		cp.LogAliyunAK.Project = project
-		q.Del("_sys_project")
-	}
-
-	if logstore := q.Get("_sys_logstore"); logstore != "" {
-		cp.LogAliyunAK.LogStore = logstore
-		q.Del("_sys_logstore")
-	}
-
-	if endpoint := q.Get("_sys_endpoint"); endpoint != "" {
-		cp.LogAliyunAK.Endpoint = endpoint
-		q.Del("_sys_endpoint")
+	for k, v := range map[string]*string{
+		"_sys_project":  &cp.LogAliyunAK.Project,
+		"_sys_logstore": &cp.LogAliyunAK.LogStore,
+		"_sys_endpoint": &cp.LogAliyunAK.Endpoint,
+	} {
+		if qv := q.Get(k); qv != "" {
+			q.Del(k)
+			*v = qv
+		}
 	}
 
 	return cp
@@ -376,6 +371,9 @@ func reparseUserAgent(ua string) string {
 	} else if strings.Contains(ua, "curl") {
 		// curl/7.54.0
 		return "curl"
+	} else if strings.Contains(ua, "Go-http") {
+		// Go-http-client/1.1
+		return "go"
 	} else if len(ua) > 8 {
 		return ua[:8]
 	}
