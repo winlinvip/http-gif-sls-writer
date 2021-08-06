@@ -92,7 +92,7 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		cp := co.Parse(q)
-		logForApp, keepReferer, keepUA, keepOReferer, keepOUA := parseLogForApp(q)
+		logForApp, keepReferer, keepUA, keepOReferer, keepOUA, keepFWD := parseLogForApp(q)
 
 		if !strings.HasPrefix(r.URL.Path, "/gif") && !logForApp {
 			ol.Wf(ctx, "Ignore %v of %v", r.URL.Path, r.URL.String())
@@ -118,6 +118,9 @@ func main() {
 			}
 			if keepUA {
 				q.Set("ua", reparseUserAgent(ua))
+			}
+			if keepFWD {
+				q.Set("fwd", q.Get("X-Forwarded-For"))
 			}
 		} else {
 			q.Set("oreferer", referer)
@@ -183,6 +186,7 @@ func main() {
 	ol.Tf(ctx, "->Note that ?_sys_keep_ua=true to keep the ua")
 	ol.Tf(ctx, "->Note that ?_sys_keep_oreferer=true to keep the original referer")
 	ol.Tf(ctx, "->Note that ?_sys_keep_oua=true to keep the original ua")
+	ol.Tf(ctx, "->Note that ?_sys_keep_fwd=true to keep the original X-Forwarded-For")
 	http.ListenAndServe(fmt.Sprintf(":%v", co.Port), nil)
 }
 
@@ -288,13 +292,14 @@ func (co Config) Parse(q url.Values) Config {
 	return cp
 }
 
-func parseLogForApp(q url.Values) (logForApp, keepReferer, keepUA, keepOReferer, keepOUA bool) {
+func parseLogForApp(q url.Values) (logForApp, keepReferer, keepUA, keepOReferer, keepOUA, keepFWD bool) {
 	for k, v := range map[string]*bool{
 		"_sys_logfmt_app":    &logForApp,
 		"_sys_keep_referer":  &keepReferer,
 		"_sys_keep_ua":       &keepUA,
 		"_sys_keep_oreferer": &keepOReferer,
 		"_sys_keep_oua":      &keepOUA,
+		"_sys_keep_fwd":      &keepFWD,
 	} {
 		if qv := q.Get(k); qv != "" {
 			q.Del(k)
