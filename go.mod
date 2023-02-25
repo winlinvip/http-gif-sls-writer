@@ -9,5 +9,5 @@ require (
 	github.com/golang/protobuf v1.4.3
 	github.com/ossrs/go-oryx-lib v0.0.8
 	github.com/pierrec/lz4 v2.6.0+incompatible // indirect
-	golang.org/x/net v0.0.0-20210220033124-5f55cee0dc0d // indirect
+	golang.org/x/net v0.7.0 // indirect
 )
