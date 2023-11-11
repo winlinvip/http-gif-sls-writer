@@ -9,7 +9,6 @@ on:
 jobs:
   envs:
     name: envs
-    runs-on: ubuntu-20.04
     steps:
       # Git checkout
       - name: Checkout repository
@@ -25,13 +24,20 @@ jobs:
           echo "SRS_TAG=$SRS_TAG" >> $GITHUB_ENV
           SRS_MAJOR=$(echo $SRS_TAG| cut -c 2)
           echo "SRS_MAJOR=$SRS_MAJOR" >> $GITHUB_ENV
+      # Generate variables like:
+      #   SRS_DROPLET_EIP=1.2.3.4
+      - name: Build droplet variables
+        run: |
+          SRS_DROPLET_EIP=$(dig +short n2.ossrs.net)
+          echo "SRS_DROPLET_EIP=$SRS_DROPLET_EIP" >> $GITHUB_ENV
     outputs:
+      SRS_DROPLET_EIP: ${{ env.SRS_DROPLET_EIP }}
       SRS_TAG: ${{ env.SRS_TAG }}
       SRS_MAJOR: ${{ env.SRS_MAJOR }}
+    runs-on: ubuntu-20.04
 
   docker:
     name: docker
-    runs-on: ubuntu-20.04
     needs:
       - envs
     steps:
@@ -53,10 +59,10 @@ jobs:
           docker build --tag ossrs/hgsw:$SRS_TAG -f Dockerfile .
           docker tag ossrs/hgsw:$SRS_TAG ossrs/hgsw:$SRS_MAJOR
           docker push --all-tags ossrs/hgsw
+    runs-on: ubuntu-20.04
 
   aliyun:
     name: aliyun-hub
-    runs-on: ubuntu-20.04
     needs:
       - envs
       - docker
@@ -78,3 +84,40 @@ jobs:
           dst: |
             registry.cn-hangzhou.aliyuncs.com/ossrs/hgsw:${{ env.SRS_TAG }}
             registry.cn-hangzhou.aliyuncs.com/ossrs/hgsw:${{ env.SRS_MAJOR }}
+    runs-on: ubuntu-20.04
+
+  deploy:
+    name: deploy
+    needs:
+      - envs
+      - aliyun
+    steps:
+      - name: Covert output to env
+        run: |
+          echo "SRS_TAG=${{ needs.envs.outputs.SRS_TAG }}" >> $GITHUB_ENV
+          echo "SRS_MAJOR=${{ needs.envs.outputs.SRS_MAJOR }}" >> $GITHUB_ENV
+          echo "SRS_DROPLET_EIP=${{ needs.envs.outputs.SRS_DROPLET_EIP }}" >> $GITHUB_ENV
+      # Execute command in a ssh, because ufw limit the rate.
+      - name: Restart the containers
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.SRS_DROPLET_EIP }}
+          username: root
+          key: ${{ secrets.DIGITALOCEAN_SSHKEY }}
+          port: 22
+          envs: SRS_TAG,SRS_MAJOR
+          timeout: 60s
+          command_timeout: 30m
+          script: |
+            # Allow access to container.
+            ufw allow 1987
+            #
+            # Restart HGSW
+            cat << END > /root/restart_docs-hgsw.sh
+              docker rm -f docs-hgsw || sleep 1
+              docker run -d -it --restart always \\
+                --log-driver=json-file --log-opt=max-size=500m --log-opt=max-file=3 \\
+                --name docs-hgsw -p 1987:1987 registry.cn-hangzhou.aliyuncs.com/ossrs/hgsw:$SRS_MAJOR
+            END
+            bash /root/restart_docs-hgsw.sh
+    runs-on: ubuntu-20.04
