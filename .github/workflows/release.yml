@@ -74,7 +74,7 @@ jobs:
       - name: Docker copy images
         uses: akhilerm/tag-push-action@v2.1.0
         with:
-          src: ossrs/srs-stack:${{ env.SRS_TAG }}
+          src: ossrs/hgsw:${{ env.SRS_TAG }}
           dst: |
             registry.cn-hangzhou.aliyuncs.com/ossrs/hgsw:${{ env.SRS_TAG }}
             registry.cn-hangzhou.aliyuncs.com/ossrs/hgsw:${{ env.SRS_MAJOR }}
