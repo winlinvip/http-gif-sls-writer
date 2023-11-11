@@ -31,6 +31,47 @@ const (
 )
 
 const (
+	CountConditionKey = "__count__"
+)
+
+type Severity int
+
+const (
+	Report   Severity = 2
+	Low      Severity = 4
+	Medium   Severity = 6
+	High     Severity = 8
+	Critical Severity = 10
+)
+
+// power sql
+type PowerSqlMode string
+
+const (
+	PowerSqlModeAuto    PowerSqlMode = "auto"
+	PowerSqlModeEnable  PowerSqlMode = "enable"
+	PowerSqlModeDisable PowerSqlMode = "disable"
+)
+
+const (
+	JoinTypeCross        = "cross_join"
+	JoinTypeInner        = "inner_join"
+	JoinTypeLeft         = "left_join"
+	JoinTypeRight        = "right_join"
+	JoinTypeFull         = "full_join"
+	JoinTypeLeftExclude  = "left_exclude"
+	JoinTypeRightExclude = "right_exclude"
+	JoinTypeConcat       = "concat"
+	JoinTypeNo           = "no_join"
+)
+
+const (
+	GroupTypeNoGroup    = "no_group"
+	GroupTypeLabelsAuto = "labels_auto"
+	GroupTypeCustom     = "custom"
+)
+
+const (
 	ScheduleTypeFixedRate = "FixedRate"
 	ScheduleTypeHourly    = "Hourly"
 	ScheduleTypeDaily     = "Daily"
@@ -39,6 +80,79 @@ const (
 	ScheduleTypeDayRun    = "DryRun"
 	ScheduleTypeResident  = "Resident"
 )
+
+const (
+	StoreTypeLog    = "log"
+	StoreTypeMetric = "metric"
+	StoreTypeMeta   = "meta"
+)
+
+// SeverityConfiguration severity config by group
+type SeverityConfiguration struct {
+	Severity      Severity               `json:"severity"`
+	EvalCondition ConditionConfiguration `json:"evalCondition"`
+}
+
+type ConditionConfiguration struct {
+	Condition      string `json:"condition"`
+	CountCondition string `json:"countCondition"`
+}
+
+type JoinConfiguration struct {
+	Type      string `json:"type"`
+	Condition string `json:"condition"`
+}
+
+type GroupConfiguration struct {
+	Type   string   `json:"type"`
+	Fields []string `json:"fields"`
+}
+
+type Tag struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+type Token struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Required    bool   `json:"required"`
+	Type        string `json:"type"`
+	Default     string `json:"default"`
+	Hide        bool   `json:"hide"`
+}
+
+type TemplateConfiguration struct {
+	Id          string            `json:"id"`
+	Type        string            `json:"type"`
+	Version     string            `json:"version"`
+	Lang        string            `json:"lang"`
+	Tokens      map[string]string `json:"tokens"`
+	Annotations map[string]string `json:"annotations"`
+}
+
+type PolicyConfiguration struct {
+	UseDefault     bool   `json:"useDefault"`
+	RepeatInterval string `json:"repeatInterval"`
+	AlertPolicyId  string `json:"alertPolicyId"`
+	ActionPolicyId string `json:"actionPolicyId"`
+}
+
+type SinkEventStoreConfiguration struct {
+	Enabled    bool   `json:"enabled"`
+	Endpoint   string `json:"endpoint"`
+	Project    string `json:"project"`
+	EventStore string `json:"eventStore"`
+	RoleArn    string `json:"roleArn"`
+}
+
+type SinkCmsConfiguration struct {
+	Enabled bool `json:"enabled"`
+}
+
+type SinkAlerthubConfiguration struct {
+	Enabled bool `json:"enabled"`
+}
 
 type Alert struct {
 	Name             string              `json:"name"`
@@ -66,16 +180,6 @@ func (alert *Alert) MarshalJSON() ([]byte, error) {
 	return json.Marshal(body)
 }
 
-type AlertConfiguration struct {
-	Condition        string          `json:"condition"`
-	Dashboard        string          `json:"dashboard"`
-	QueryList        []*AlertQuery   `json:"queryList"`
-	MuteUntil        int64           `json:"muteUntil"`
-	NotificationList []*Notification `json:"notificationList"`
-	NotifyThreshold  int32           `json:"notifyThreshold"`
-	Throttling       string          `json:"throttling"`
-}
-
 type AlertQuery struct {
 	ChartTitle   string `json:"chartTitle"`
 	LogStore     string `json:"logStore"`
@@ -83,6 +187,14 @@ type AlertQuery struct {
 	TimeSpanType string `json:"timeSpanType"`
 	Start        string `json:"start"`
 	End          string `json:"end"`
+
+	StoreType    string       `json:"storeType"`
+	Project      string       `json:"project"`
+	Store        string       `json:"store"`
+	Region       string       `json:"region"`
+	RoleArn      string       `json:"roleArn"`
+	DashboardId  string       `json:"dashboardId"`
+	PowerSqlMode PowerSqlMode `json:"powerSqlMode"`
 }
 
 type Notification struct {
@@ -102,6 +214,41 @@ type Schedule struct {
 	Delay          int32  `json:"delay"`
 	DayOfWeek      int32  `json:"dayOfWeek"`
 	Hour           int32  `json:"hour"`
+	RunImmediately bool   `json:"runImmediately"`
+	TimeZone       string `json:"timeZone,omitempty"`
+}
+
+type AlertConfiguration struct {
+	Condition        string          `json:"condition"`
+	MuteUntil        int64           `json:"muteUntil,omitempty"`
+	NotificationList []*Notification `json:"notificationList"`
+	NotifyThreshold  int32           `json:"notifyThreshold"`
+	Throttling       string          `json:"throttling"`
+
+	Version               string                 `json:"version"`
+	Type                  string                 `json:"type"`
+	TemplateConfiguration *TemplateConfiguration `json:"templateConfiguration"`
+
+	Dashboard              string                   `json:"dashboard"`
+	Threshold              int                      `json:"threshold"`
+	NoDataFire             bool                     `json:"noDataFire"`
+	NoDataSeverity         Severity                 `json:"noDataSeverity"`
+	SendResolved           bool                     `json:"sendResolved"`
+	QueryList              []*AlertQuery            `json:"queryList"`
+	Annotations            []*Tag                   `json:"annotations"`
+	Labels                 []*Tag                   `json:"labels"`
+	SeverityConfigurations []*SeverityConfiguration `json:"severityConfigurations"`
+
+	JoinConfigurations []*JoinConfiguration `json:"joinConfigurations"`
+	GroupConfiguration GroupConfiguration   `json:"groupConfiguration"`
+
+	PolicyConfiguration PolicyConfiguration          `json:"policyConfiguration"`
+	AutoAnnotation      bool                         `json:"autoAnnotation"`
+	SinkEventStore      *SinkEventStoreConfiguration `json:"sinkEventStore"`
+	SinkCms             *SinkCmsConfiguration        `json:"sinkCms"`
+	SinkAlerthub        *SinkAlerthubConfiguration   `json:"sinkAlerthub"`
+
+	Tags []string `json:"tags,omitempty"`
 }
 
 func (c *Client) CreateSavedSearch(project string, savedSearch *SavedSearch) error {
@@ -259,6 +406,22 @@ func (c *Client) CreateAlert(project string, alert *Alert) error {
 	return nil
 }
 
+func (c *Client) CreateAlertString(project string, alert string) error {
+	body := []byte(alert)
+	h := map[string]string{
+		"x-log-bodyrawsize": fmt.Sprintf("%v", len(body)),
+		"Content-Type":      "application/json",
+	}
+
+	uri := "/jobs"
+	r, err := c.request(project, "POST", uri, h, body)
+	if err != nil {
+		return err
+	}
+	r.Body.Close()
+	return nil
+}
+
 func (c *Client) UpdateAlert(project string, alert *Alert) error {
 	body, err := json.Marshal(alert)
 	if err != nil {
@@ -271,6 +434,23 @@ func (c *Client) UpdateAlert(project string, alert *Alert) error {
 	}
 
 	uri := "/jobs/" + alert.Name
+	r, err := c.request(project, "PUT", uri, h, body)
+	if err != nil {
+		return err
+	}
+	r.Body.Close()
+	return nil
+}
+
+func (c *Client) UpdateAlertString(project string, alertName, alert string) error {
+	body := []byte(alert)
+
+	h := map[string]string{
+		"x-log-bodyrawsize": fmt.Sprintf("%v", len(body)),
+		"Content-Type":      "application/json",
+	}
+
+	uri := "/jobs/" + alertName
 	r, err := c.request(project, "PUT", uri, h, body)
 	if err != nil {
 		return err
@@ -341,6 +521,21 @@ func (c *Client) GetAlert(project string, alertName string) (*Alert, error) {
 	return alert, err
 }
 
+func (c *Client) GetAlertString(project string, alertName string) (string, error) {
+	h := map[string]string{
+		"x-log-bodyrawsize": "0",
+		"Content-Type":      "application/json",
+	}
+	uri := "/jobs/" + alertName
+	r, err := c.request(project, "GET", uri, h, nil)
+	if err != nil {
+		return "", err
+	}
+	defer r.Body.Close()
+	buf, _ := ioutil.ReadAll(r.Body)
+	return string(buf), err
+}
+
 func (c *Client) ListAlert(project, alertName, dashboard string, offset, size int) (alerts []*Alert, total int, count int, err error) {
 	h := map[string]string{
 		"x-log-bodyrawsize": "0",
@@ -372,4 +567,19 @@ func (c *Client) ListAlert(project, alertName, dashboard string, offset, size in
 		err = NewClientError(err)
 	}
 	return listAlert.Results, listAlert.Total, listAlert.Count, err
+}
+
+func (c *Client) PublishAlertEvent(project string, alertResult []byte) error {
+	h := map[string]string{
+		"x-log-bodyrawsize": fmt.Sprintf("%v", len(alertResult)),
+		"Content-Type":      "application/json",
+	}
+
+	uri := "/event/alerthub?type=raw"
+	r, err := c.request(project, "POST", uri, h, alertResult)
+	if err != nil {
+		return err
+	}
+	r.Body.Close()
+	return nil
 }

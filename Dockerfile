@@ -3,7 +3,7 @@
 ############################################################
 # build
 ############################################################
-FROM registry.cn-hangzhou.aliyuncs.com/ossrs/srs:dev AS build
+FROM ossrs/srs:ubuntu20 AS build
 
 COPY . /tmp/hgsw
 RUN cd /tmp/hgsw && make
@@ -14,7 +14,7 @@ RUN cp /tmp/hgsw/main.conf /usr/local/etc/main.conf
 ############################################################
 # dist
 ############################################################
-FROM centos:7 AS dist
+FROM ubuntu:focal AS dist
 
 # HTTP/1987
 EXPOSE 1987

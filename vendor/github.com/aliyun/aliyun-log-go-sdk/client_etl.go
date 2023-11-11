@@ -163,7 +163,7 @@ func (c *Client) ListETL(project string, offset int, size int) (*ListETLResponse
 		"Content-Type":      "application/json",
 	}
 
-	uri := fmt.Sprintf("/jobs?offset=%d&size=%d", offset, size)
+	uri := fmt.Sprintf("/jobs?offset=%d&size=%d&jobType=ETL", offset, size)
 	r, err := c.request(project, "GET", uri, h, nil)
 	if err != nil {
 		return nil, err
@@ -201,6 +201,24 @@ func (c *Client) StopETL(project, name string) error {
 
 	uri := fmt.Sprintf("/jobs/%s?action=STOP", name)
 	r, err := c.request(project, "PUT", uri, h, nil)
+	if err != nil {
+		return err
+	}
+	r.Body.Close()
+	return nil
+}
+
+func (c *Client) RestartETL(project string, etljob ETL) error {
+	body, err := json.Marshal(etljob)
+	if err != nil {
+		return NewClientError(err)
+	}
+	h := map[string]string{
+		"x-log-bodyrawsize": fmt.Sprintf("%v", len(body)),
+		"Content-Type":      "application/json",
+	}
+	uri := fmt.Sprintf("/jobs/%s?action=RESTART", etljob.Name)
+	r, err := c.request(project, "PUT", uri, h, body)
 	if err != nil {
 		return err
 	}

@@ -3,7 +3,6 @@ package sls
 // request sends a request to SLS.
 import (
 	"bytes"
-	"crypto/md5"
 	"encoding/json"
 	"fmt"
 
@@ -19,7 +18,7 @@ import (
 // @note if error is nil, you must call http.Response.Body.Close() to finalize reader
 func (c *Client) request(project, method, uri string, headers map[string]string, body []byte) (*http.Response, error) {
 	// The caller should provide 'x-log-bodyrawsize' header
-	if _, ok := headers["x-log-bodyrawsize"]; !ok {
+	if _, ok := headers[HTTPHeaderBodyRawSize]; !ok {
 		return nil, fmt.Errorf("Can't find 'x-log-bodyrawsize' header")
 	}
 
@@ -37,49 +36,65 @@ func (c *Client) request(project, method, uri string, headers map[string]string,
 	// SLS public request headers
 	var hostStr string
 	if len(project) == 0 {
-		hostStr = project
+		hostStr = endpoint
 	} else {
 		hostStr = project + "." + endpoint
 	}
-	headers["Host"] = hostStr
-	headers["Date"] = nowRFC1123()
-	headers["x-log-apiversion"] = version
-	headers["x-log-signaturemethod"] = signatureMethod
+	headers[HTTPHeaderHost] = hostStr
+	headers[HTTPHeaderAPIVersion] = version
 
 	if len(c.UserAgent) > 0 {
-		headers["User-Agent"] = c.UserAgent
+		headers[HTTPHeaderUserAgent] = c.UserAgent
 	} else {
-		headers["User-Agent"] = defaultLogUserAgent
+		headers[HTTPHeaderUserAgent] = DefaultLogUserAgent
 	}
 
 	c.accessKeyLock.RLock()
 	stsToken := c.SecurityToken
 	accessKeyID := c.AccessKeyID
 	accessKeySecret := c.AccessKeySecret
+	region := c.Region
+	authVersion := c.AuthVersion
 	c.accessKeyLock.RUnlock()
+
+	if c.credentialsProvider != nil {
+		res, err := c.credentialsProvider.GetCredentials()
+		if err != nil {
+			return nil, fmt.Errorf("fail to fetch credentials: %w", err)
+		}
+		accessKeyID = res.AccessKeyID
+		accessKeySecret = res.AccessKeySecret
+		stsToken = res.SecurityToken
+	}
 
 	// Access with token
 	if stsToken != "" {
-		headers["x-acs-security-token"] = stsToken
+		headers[HTTPHeaderAcsSecurityToken] = stsToken
 	}
 
 	if body != nil {
-		bodyMD5 := fmt.Sprintf("%X", md5.Sum(body))
-		headers["Content-MD5"] = bodyMD5
-		if _, ok := headers["Content-Type"]; !ok {
+		if _, ok := headers[HTTPHeaderContentType]; !ok {
 			return nil, fmt.Errorf("Can't find 'Content-Type' header")
 		}
 	}
-
-	// Calc Authorization
-	// Authorization = "SLS <AccessKeyId>:<Signature>"
-	digest, err := signature(accessKeySecret, method, uri, headers)
-	if err != nil {
+	for k, v := range c.InnerHeaders {
+		headers[k] = v
+	}
+	var signer Signer
+	if authVersion == AuthV4 {
+		headers[HTTPHeaderLogDate] = dateTimeISO8601()
+		signer = NewSignerV4(accessKeyID, accessKeySecret, region)
+	} else if authVersion == AuthV0 {
+		signer = NewSignerV0()
+	} else {
+		headers[HTTPHeaderDate] = nowRFC1123()
+		signer = NewSignerV1(accessKeyID, accessKeySecret)
+	}
+	if err := signer.Sign(method, uri, headers, body); err != nil {
 		return nil, err
 	}
-	auth := fmt.Sprintf("SLS %v:%v", accessKeyID, digest)
-	headers["Authorization"] = auth
 
+	addHeadersAfterSign(c.CommonHeaders, headers)
 	// Initialize http request
 	reader := bytes.NewReader(body)
 	var urlStr string
@@ -106,7 +121,11 @@ func (c *Client) request(project, method, uri string, headers map[string]string,
 	}
 
 	// Get ready to do request
-	resp, err := defaultHttpClient.Do(req)
+	httpClient := c.HTTPClient
+	if httpClient == nil {
+		httpClient = defaultHttpClient
+	}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

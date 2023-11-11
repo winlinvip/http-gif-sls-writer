@@ -1,4 +1,4 @@
-.PHONY: default
+.PHONY: default clean
 
 default: ./objs/http-gif-sls-writer
 
@@ -6,3 +6,5 @@ default: ./objs/http-gif-sls-writer
 	gofmt -w .
 	go build -mod=vendor -o objs/http-gif-sls-writer .
 
+clean:
+	rm -f objs/*

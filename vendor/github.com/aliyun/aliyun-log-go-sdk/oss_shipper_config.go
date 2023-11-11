@@ -25,6 +25,23 @@ type shipperDisplay struct {
 	TargetConfiguration interface{} `json:"targetConfiguration"`
 }
 
+type OssStoreageCsvDetail struct {
+	Delimiter      string   `json:"delemiter"`
+	Header         bool     `json:"header"`
+	LineFeed       string   `json:"lineFeed"`
+	Columns        []string `json:"columns"`
+	NullIdentifier string   `json:"nullIdentfifier"`
+	Quote          string   `json:"quote"`
+}
+
+type ParquetConfig struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+type OssStoreageParquet struct {
+	Columns []ParquetConfig `json:"columns"`
+}
 type OSSShipperConfig struct {
 	OssBucket      string         `json:"ossBucket"`
 	OssPrefix      string         `json:"ossPrefix"`

@@ -2,10 +2,8 @@ package sls
 
 import (
 	"bytes"
-	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"github.com/go-kit/kit/log/level"
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
@@ -13,13 +11,14 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
+	"github.com/go-kit/kit/log/level"
 	"golang.org/x/net/context"
 )
 
 // timeout configs
 var (
-	defaultRequestTimeout = 10 * time.Second
-	defaultRetryTimeout   = 30 * time.Second
+	defaultRequestTimeout = 60 * time.Second
+	defaultRetryTimeout   = 90 * time.Second
 	defaultHttpClient     = &http.Client{
 		Timeout: defaultRequestTimeout,
 	}
@@ -140,49 +139,63 @@ func realRequest(ctx context.Context, project *LogProject, method, uri string, h
 	body []byte) (*http.Response, error) {
 
 	// The caller should provide 'x-log-bodyrawsize' header
-	if _, ok := headers["x-log-bodyrawsize"]; !ok {
+	if _, ok := headers[HTTPHeaderBodyRawSize]; !ok {
 		return nil, NewClientError(fmt.Errorf("Can't find 'x-log-bodyrawsize' header"))
 	}
 
 	// SLS public request headers
-	// var hostStr string
-	// if len(project.Name) == 0 {
-	// 	hostStr = project.Endpoint
-	// } else {
-	// 	hostStr = project.Name + "." + project.Endpoint
-	// }
 	baseURL := project.getBaseURL()
-	headers["Host"] = baseURL
-	headers["Date"] = nowRFC1123()
-	headers["x-log-apiversion"] = version
-	headers["x-log-signaturemethod"] = signatureMethod
+	headers[HTTPHeaderHost] = baseURL
+	headers[HTTPHeaderAPIVersion] = version
 	if len(project.UserAgent) > 0 {
-		headers["User-Agent"] = project.UserAgent
+		headers[HTTPHeaderUserAgent] = project.UserAgent
 	} else {
-		headers["User-Agent"] = defaultLogUserAgent
+		headers[HTTPHeaderUserAgent] = DefaultLogUserAgent
+	}
+
+	stsToken := project.SecurityToken
+	accessKeyID := project.AccessKeyID
+	accessKeySecret := project.AccessKeySecret
+
+	if project.credentialProvider != nil {
+		c, err := project.credentialProvider.GetCredentials()
+		if err != nil {
+			return nil, NewClientError(fmt.Errorf("fail to get credentials: %w", err))
+		}
+		stsToken = c.SecurityToken
+		accessKeyID = c.AccessKeyID
+		accessKeySecret = c.AccessKeySecret
 	}
 
 	// Access with token
-	if project.SecurityToken != "" {
-		headers["x-acs-security-token"] = project.SecurityToken
+	if stsToken != "" {
+		headers[HTTPHeaderAcsSecurityToken] = stsToken
 	}
 
 	if body != nil {
-		bodyMD5 := fmt.Sprintf("%X", md5.Sum(body))
-		headers["Content-MD5"] = bodyMD5
-		if _, ok := headers["Content-Type"]; !ok {
+		if _, ok := headers[HTTPHeaderContentType]; !ok {
 			return nil, NewClientError(fmt.Errorf("Can't find 'Content-Type' header"))
 		}
 	}
 
-	// Calc Authorization
-	// Authorization = "SLS <AccessKeyId>:<Signature>"
-	digest, err := signature(project.AccessKeySecret, method, uri, headers)
-	if err != nil {
-		return nil, NewClientError(err)
+	for k, v := range project.InnerHeaders {
+		headers[k] = v
 	}
-	auth := fmt.Sprintf("SLS %v:%v", project.AccessKeyID, digest)
-	headers["Authorization"] = auth
+	var signer Signer
+	if project.AuthVersion == AuthV4 {
+		headers[HTTPHeaderLogDate] = dateTimeISO8601()
+		signer = NewSignerV4(accessKeyID, accessKeySecret, project.Region)
+	} else if project.AuthVersion == AuthV0 {
+		signer = NewSignerV0()
+	} else {
+		headers[HTTPHeaderDate] = nowRFC1123()
+		signer = NewSignerV1(accessKeyID, accessKeySecret)
+	}
+	if err := signer.Sign(method, uri, headers, body); err != nil {
+		return nil, err
+	}
+
+	addHeadersAfterSign(project.CommonHeaders, headers)
 
 	// Initialize http request
 	reader := bytes.NewReader(body)

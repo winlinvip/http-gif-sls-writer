@@ -18,9 +18,10 @@ func (c *Client) ListLogStore(project string) ([]string, error) {
 }
 
 // ListLogStoreV2 list logstores with params :
-//                offset: start offset
-//                size: max return size
-//                telemetryType : telemetry type filter
+//
+//	offset: start offset
+//	size: max return size
+//	telemetryType : telemetry type filter
 func (c *Client) ListLogStoreV2(project string, offset, size int, telemetryType string) ([]string, error) {
 	proj := convert(c, project)
 	return proj.ListLogStoreV2(offset, size, telemetryType)
@@ -67,6 +68,19 @@ func (c *Client) UpdateLogStore(project string, logstore string, ttl, shardCnt i
 func (c *Client) UpdateLogStoreV2(project string, logstore *LogStore) (err error) {
 	proj := convert(c, project)
 	return proj.UpdateLogStoreV2(logstore)
+}
+
+// GetLogStoreMeteringMode get the metering mode of logstore, eg. ChargeByFunction / ChargeByDataIngest
+func (c *Client) GetLogStoreMeteringMode(project string, logstore string) (*GetMeteringModeResponse, error) {
+	ls := convertLogstore(c, project, logstore)
+	return ls.GetMeteringMode()
+}
+
+// GetLogStoreMeteringMode update the metering mode of logstore, eg. ChargeByFunction / ChargeByDataIngest
+// Warning: this method may affect your billings, for more details ref: https://www.aliyun.com/price/detail/sls
+func (c *Client) UpdateLogStoreMeteringMode(project string, logstore string, meteringMode string) error {
+	ls := convertLogstore(c, project, logstore)
+	return ls.UpdateMeteringMode(meteringMode)
 }
 
 // ListMachineGroup returns machine group name list and the total number of machine groups.
@@ -116,6 +130,47 @@ func (c *Client) ListMachines(project, machineGroupName string) (ms []*Machine, 
 	ms = body.Machines
 	total = body.Total
 
+	return
+}
+
+func (c *Client) ListMachinesV2(project, machineGroupName string, offset, size int) (ms []*Machine, total int, err error) {
+	h := map[string]string{
+		"x-log-bodyrawsize": "0",
+	}
+	uri := fmt.Sprintf("/machinegroups/%v/machines?offset=%v&size=%v", machineGroupName, offset, size)
+	r, err := c.request(project, "GET", uri, h, nil)
+	if err != nil {
+		return
+	}
+	defer r.Body.Close()
+	buf, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+	if r.StatusCode != http.StatusOK {
+		errMsg := &Error{}
+		err = json.Unmarshal(buf, errMsg)
+		if err != nil {
+			err = fmt.Errorf("failed to unmarshal list machines response: %v", err)
+			if IsDebugLevelMatched(1) {
+				dump, _ := httputil.DumpResponse(r, true)
+				level.Error(Logger).Log("msg", string(dump))
+			}
+			return
+		}
+		err = fmt.Errorf("%v:%v", errMsg.Code, errMsg.Message)
+		return
+	}
+
+	body := &MachineList{}
+	err = json.Unmarshal(buf, body)
+	if err != nil {
+		return
+	}
+
+	ms = body.Machines
+	total = body.Total
 	return
 }
 
