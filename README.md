@@ -1,13 +1,11 @@
 # http-gif-sls-writer
 
-Docker for https://github.com/winlinvip/http-gif-sls-writer
-
-Build at https://code.aliyun.com/ossrs/http-gif-sls-writer
-
-Images at https://cr.console.aliyun.com/repository/cn-hangzhou/ossrs/hgsw/images
+Create a gif image to report to Aliyun SLS.
 
 ## Usage
 
 ```
+docker run -p 1987:1987 --rm ossrs/hgsw
+# Or use aliyun mirror.
 docker run -p 1987:1987 --rm registry.cn-hangzhou.aliyuncs.com/ossrs/hgsw
 ```
