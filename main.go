@@ -90,6 +90,7 @@ func main() {
 
 	ol.Tf(ctx, "Handle /")
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		starttime := time.Now()
 		q := r.URL.Query()
 		cp := co.Parse(q)
 		logForApp, keepReferer, keepUA, keepOReferer, keepOUA, keepFWD := parseLogForApp(q)
@@ -152,7 +153,8 @@ func main() {
 				return
 			}
 		}
-		ol.Tf(ctx, "Stat as %v from url=%v config=%v", string(bb), rawURL, cp)
+		ol.Tf(ctx, "Stat as %v from url=%v config=%v, cost=%v",
+			string(bb), rawURL, cp, time.Now().Sub(starttime))
 
 		if logForApp {
 			w.Write(nil)
