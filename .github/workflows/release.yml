@@ -119,6 +119,7 @@ jobs:
             cat << END > /root/restart_docs-hgsw.sh
               docker rm -f docs-hgsw || sleep 1
               docker run -d -it --restart always \\
+                -v /root/conf/hgsw.conf:/usr/local/etc/main.conf \\
                 --log-driver=json-file --log-opt=max-size=500m --log-opt=max-file=3 \\
                 --name docs-hgsw -p 1987:1987 registry.cn-hangzhou.aliyuncs.com/ossrs/hgsw:$SRS_MAJOR
             END
@@ -155,6 +156,7 @@ jobs:
             cat << END > /root/restart_docs-hgsw.sh
               docker rm -f docs-hgsw || sleep 1
               docker run -d -it --restart always \\
+                -v /root/conf/hgsw.conf:/usr/local/etc/main.conf \\
                 --log-driver=json-file --log-opt=max-size=500m --log-opt=max-file=3 \\
                 --name docs-hgsw -p 1987:1987 registry.cn-hangzhou.aliyuncs.com/ossrs/hgsw:$SRS_MAJOR
             END
