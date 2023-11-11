@@ -137,22 +137,24 @@ func main() {
 				qq[k] = q.Get(k)
 			}
 		}
-		if err := writeSlsLog(ctx, &cp, qq); err != nil {
-			oh.WriteError(ctx, w, r, err)
-			return
-		}
-
 		bb, err := json.Marshal(qq)
 		if err != nil {
 			oh.WriteError(ctx, w, r, err)
 			return
 		}
-		if f != nil {
-			if _, err := io.WriteString(f, string(bb)+"\n"); err != nil {
+		go func() {
+			if err := writeSlsLog(ctx, &cp, qq); err != nil {
 				oh.WriteError(ctx, w, r, err)
 				return
 			}
-		}
+
+			if f != nil {
+				if _, err := io.WriteString(f, string(bb)+"\n"); err != nil {
+					oh.WriteError(ctx, w, r, err)
+					return
+				}
+			}
+		}()
 		ol.Tf(ctx, "Stat as %v from url=%v config=%v, cost=%v",
 			string(bb), rawURL, cp, time.Now().Sub(starttime))
 
