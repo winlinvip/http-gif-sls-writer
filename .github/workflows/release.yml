@@ -126,6 +126,12 @@ jobs:
                 registry.cn-hangzhou.aliyuncs.com/ossrs/hgsw:$SRS_MAJOR
             END
             bash /root/restart_docs-hgsw.sh
+            #
+            # Cleanup old docker images.
+            for image in $(docker images |grep '<none>' |awk '{print $3}'); do
+              docker rmi -f $image
+              echo "Remove image $image, r0=$?"
+            done
     runs-on: ubuntu-20.04
 
   deploy2:
@@ -164,4 +170,10 @@ jobs:
                 --name docs-hgsw -p 1987:1987 ossrs/hgsw:$SRS_MAJOR
             END
             bash /root/restart_docs-hgsw.sh
+            #
+            # Cleanup old docker images.
+            for image in $(docker images |grep '<none>' |awk '{print $3}'); do
+              docker rmi -f $image
+              echo "Remove image $image, r0=$?"
+            done
     runs-on: ubuntu-20.04
