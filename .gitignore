@@ -15,3 +15,5 @@
 /http-gif-sls-writer
 objs
 /console.conf
+
+.DS_Store
