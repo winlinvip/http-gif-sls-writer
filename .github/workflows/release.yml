@@ -117,6 +117,7 @@ jobs:
             #
             # Restart HGSW
             cat << END > /root/restart_docs-hgsw.sh
+              # See https://github.com/winlinvip/http-gif-sls-writer
               docker pull registry.cn-hangzhou.aliyuncs.com/ossrs/hgsw:$SRS_MAJOR
               docker rm -f docs-hgsw || sleep 1
               docker run -d -it --restart always \\
@@ -162,6 +163,7 @@ jobs:
             #
             # Restart HGSW
             cat << END > /root/restart_docs-hgsw.sh
+              # See https://github.com/winlinvip/http-gif-sls-writer
               docker pull ossrs/hgsw:$SRS_MAJOR
               docker rm -f docs-hgsw || sleep 1
               docker run -d -it --restart always \\
